@@ -13,7 +13,9 @@ author = "Dave"
 # Add menu links. $BASE_URL wil be expanded
 clean_blog_menu = [
     {url = "$BASE_URL", name = "Home"},
-    {url = "$BASE_URL/about", name = "About"}
+    {url = "$BASE_URL/ai/", name = "AI"},
+    {url = "$BASE_URL/contribute/", name="Contribute!"},
+    {url = "$BASE_URL/search", name = "Search" }
 ]
 
 # Add social links. $BASE_URL wil be expanded

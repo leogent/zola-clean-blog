@@ -1,0 +1,220 @@
+{% extends "index.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+            <div class="search-container">
+                <div class="search-header">
+                    <h2>Search Articles</h2>
+                    <div class="search-input-wrapper">
+                        <input type="text" id="search-input" placeholder="Type to search articles..." class="form-control">
+                        <div class="search-icon">
+                            <i class="fas fa-search"></i>
+                        </div>
+                    </div>
+                </div>
+                <div id="search-results" class="mt-4">
+                    <div class="search-placeholder">
+                        <p>Start typing to search articles...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ get_url(path="elasticlunr.min.js") }}"></script>
+<script>
+    window.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('search-input');
+        const searchResults = document.getElementById('search-results');
+        let searchIndex;
+        let searchTimeout;
+
+        // Initialize the search index
+        fetch('{{ get_url(path="search_index.en.json") }}')
+            .then(response => response.json())
+            .then(data => {
+                searchIndex = elasticlunr.Index.load(data);
+            })
+            .catch(error => {
+                console.error('Error loading search index:', error);
+                searchResults.innerHTML = '<div class="search-error">Error loading search index. Please try again later.</div>';
+            });
+
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+
+            if (query.length < 2) {
+                searchResults.innerHTML = '<div class="search-placeholder"><p>Start typing to search articles...</p></div>';
+                return;
+            }
+
+            // Show loading state
+            searchResults.innerHTML = '<div class="search-loading"><p>Searching...</p></div>';
+
+            // Add a small delay to prevent too many searches while typing
+            searchTimeout = setTimeout(() => {
+                const results = searchIndex.search(query, {
+                    fields: {
+                        title: {boost: 2},
+                        content: {boost: 1},
+                    },
+                    expand: true
+                });
+
+                if (results.length === 0) {
+                    searchResults.innerHTML = '<div class="search-no-results"><p>No results found for "' + query + '"</p></div>';
+                    return;
+                }
+
+                let html = '<div class="search-results-list">';
+                results.forEach(result => {
+                    const item = searchIndex.documentStore.getDoc(result.ref);
+                    if (!item) {
+                        console.error('Item not found in search index:', result.ref);
+                        return;
+                    }
+
+                    const score = Math.round(result.score * 100) / 100;
+                    let url = '';
+                    
+                    // Handle URL construction
+                    if (item.permalink) {
+                        url = item.permalink;
+                    } else if (item.id) {
+                        url = item.id.startsWith('http') ? item.id : '{{ config.base_url }}' + item.id;
+                    } else {
+                        console.error('No URL found for item:', item);
+                        return;
+                    }
+
+                    html += `
+                        <div class="search-result-item">
+                            <h3><a href="${url}">${item.title || 'Untitled'}</a></h3>
+                            <p class="search-result-description">${item.description || ''}</p>
+                            <div class="search-result-meta">
+                                <span class="search-result-date">${item.date ? new Date(item.date).toLocaleDateString() : ''}</span>
+                                <span class="search-result-score">Relevance: ${score}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                searchResults.innerHTML = html;
+            }, 300);
+        });
+    });
+</script>
+
+<style>
+    .search-container {
+        margin: 2rem 0;
+        padding: 2rem;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .search-header {
+        margin-bottom: 2rem;
+    }
+
+    .search-header h2 {
+        margin-bottom: 1rem;
+        color: #333;
+    }
+
+    .search-input-wrapper {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #666;
+    }
+
+    .search-input-wrapper input {
+        padding-right: 40px;
+        font-size: 1.1rem;
+        border: 2px solid #eee;
+        transition: border-color 0.3s ease;
+    }
+
+    .search-input-wrapper input:focus {
+        border-color: #f5671b;
+        box-shadow: none;
+    }
+
+    .search-placeholder, .search-loading, .search-no-results, .search-error {
+        text-align: center;
+        padding: 2rem;
+        color: #666;
+    }
+
+    .search-results-list {
+        margin-top: 1rem;
+    }
+
+    .search-result-item {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid #eee;
+    }
+
+    .search-result-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .search-result-item h3 {
+        margin-bottom: 0.5rem;
+    }
+
+    .search-result-item h3 a {
+        color: #f5671b;
+        text-decoration: none;
+        transition: color 0.3s ease;
+    }
+
+    .search-result-item h3 a:hover {
+        color: #d45a17;
+    }
+
+    .search-result-description {
+        color: #666;
+        margin-bottom: 0.5rem;
+    }
+
+    .search-result-meta {
+        font-size: 0.9rem;
+        color: #888;
+    }
+
+    .search-result-date {
+        margin-right: 1rem;
+    }
+
+    .search-result-score {
+        background: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    @media (max-width: 768px) {
+        .search-container {
+            padding: 1rem;
+        }
+    }
+</style>
+{% endblock content %} 
